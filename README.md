@@ -10,16 +10,15 @@ MIDI devices.
 - 📥 Real-time MIDI message monitoring
 - 🌈 Color-coded message types for easy identification
 - 🤖 Dummy data generation for testing and demonstration
-- ⏱️ Toggleable timestamp display
 - 🔍 Detailed message parsing and formatting
 - 💾 Store received SysEx messages to save your synth patches, banks, sequences and more
 - 🌓 Dark mode interface
 
 ## 🖥️ Demo
 
-[View Live Demo](https://sysex-util.vercel.app/) (Replace with your actual demo link)
+[View Live Demo](https://sysex-util.vercel.app/)
 
-![MIDI SysEx Utility Screenshot](./art/screenshot.png) (Add a screenshot of your application here)
+![MIDI SysEx Utility Screenshot](./art/screenshot.png)
 
 ## 🚀 Getting Started
 
