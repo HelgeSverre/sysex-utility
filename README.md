@@ -18,9 +18,9 @@ or any MIDI-enabled devices that use SysEx for configuration and control.
 
 ## 🖥️ Demo
 
-[View Live Demo](https://midi-sysex-utility.example.com) (Replace with your actual demo link)
+[View Live Demo](https://sysex-util.vercel.app/) (Replace with your actual demo link)
 
-![MIDI SysEx Utility Screenshot](./screenshot.png) (Add a screenshot of your application here)
+![MIDI SysEx Utility Screenshot](./art/screenshot.png) (Add a screenshot of your application here)
 
 ## 🚀 Getting Started
 

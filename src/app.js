@@ -45,6 +45,10 @@ export default () => ({
   isDummyDataRunning: false,
   dummyDataInterval: null,
 
+  isSysExMessage(data) {
+    return isSysExMessage(data);
+  },
+
   init() {
     if (navigator.requestMIDIAccess) {
       navigator
