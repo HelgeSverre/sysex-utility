@@ -1,8 +1,7 @@
 # 🎹↯ MIDI SysEx Utility
 
-MIDI SysEx Utility is a web-based application that allows you to send and receive MIDI System Exclusive (SysEx)
-messages. It's perfect for musicians, producers, and MIDI enthusiasts working with hardware synthesizers, effects units,
-or any MIDI-enabled devices that use SysEx for configuration and control.
+The MIDI SysEx Utility is a web-based tool for sending and receiving System Exclusive (SysEx) messages to and from your
+MIDI devices.
 
 ## ✨ Features
 
@@ -83,39 +82,6 @@ We welcome contributions! Here's how you can help:
 6. Open a Pull Request
 
 Please ensure your code adheres to the existing style and passes any tests.
-
-## 🐛 Troubleshooting
-
-If you encounter issues:
-
-1. Ensure your browser supports the Web MIDI API
-2. Check that your MIDI devices are properly connected and recognized by your computer
-3. Verify that SysEx support is enabled on your MIDI devices (some devices require this to be explicitly turned on)
-4. Clear your browser cache and reload the page
-5. Check the console for any error messages
-
-Common issues and solutions:
-
-```javascript
-// If no MIDI devices are detected
-if (midiAccess.inputs.size === 0 && midiAccess.outputs.size === 0) {
-  console.error(
-    "No MIDI devices detected. Please connect a MIDI device and refresh the page.",
-  );
-}
-
-// If SysEx messages are not being received
-if (navigator.requestMIDIAccess) {
-  navigator
-    .requestMIDIAccess({ sysex: true })
-    .then(onMIDISuccess, onMIDIFailure);
-} else {
-  console.error("Web MIDI API is not supported in this browser.");
-}
-```
-
-If you're still having trouble, please [open an issue](https://github.com/yourusername/midi-sysex-utility/issues) on our
-GitHub repository.
 
 ## 🚩 Reporting Bugs and Requesting Features
 
