@@ -12,7 +12,7 @@
   }
 
   .textarea {
-    @apply block h-full w-full resize-none border-0 border-none bg-zinc-950 p-2 font-mono text-sm text-slate-200 outline-none transition-colors duration-200 ease-in-out focus:bg-black focus:outline-none;
+    @apply block flex-1 h-full w-full resize-none border-0 border-none bg-zinc-950 p-2 font-mono text-sm text-slate-200 outline-none transition-colors duration-200 ease-in-out focus:bg-black focus:outline-none;
   }
 
   .button {

@@ -1,14 +1,21 @@
 import {
   bytesToHex,
+  bytesToVersion,
+  extractHexSlice,
   getNoteNameFromMIDI,
+  isSysexIdentityReply,
   isSysExMessage,
   parseMIDIMessage,
   SYSEX_IDENTITY_REQUEST,
 } from "@/utils.js";
+import MIDI_MANUFACTURERS, { ARTURIA } from "@/midi-manufacturers.js";
 
 export default () => ({
   // MIDI access granted by the browser
   midiAccess: null,
+
+  // Detected device
+  detectedDevice: null,
 
   // Midi devices
   midiInputs: [],
@@ -115,7 +122,40 @@ export default () => ({
   onMIDISuccess(access) {
     this.midiAccess = access;
     this.updateDeviceLists();
-    access.onstatechange = () => this.updateDeviceLists();
+    access.onstatechange = this.onMIDIStateChange.bind(this);
+  },
+
+  onMIDIStateChange(event) {
+    this.updateDeviceLists();
+
+    if (event.port.state === "disconnected") {
+      const portName = event.port.name || "Unknown device";
+      this.logToWindow(
+        `MIDI ${event.port.type} device disconnected: ${portName}`,
+        "warning",
+      );
+
+      if (
+        event.port.id === this.selectedInput ||
+        event.port.id === this.selectedOutput
+      ) {
+        this.detectedDevice = null;
+        this.logToWindow("Detected device data cleared", "info");
+      }
+
+      if (event.port.id === this.selectedInput) {
+        this.selectedInput = "";
+      }
+      if (event.port.id === this.selectedOutput) {
+        this.selectedOutput = "";
+      }
+    } else if (event.port.state === "connected") {
+      const portName = event.port.name || "Unknown device";
+      this.logToWindow(
+        `MIDI ${event.port.type} device connected: ${portName}`,
+        "success",
+      );
+    }
   },
 
   onMIDIFailure(error) {
@@ -126,18 +166,31 @@ export default () => ({
   updateDeviceLists() {
     this.midiInputs = Array.from(this.midiAccess.inputs.values());
     this.midiOutputs = Array.from(this.midiAccess.outputs.values());
+
+    // Check if the selected input and output still exist
+    if (
+      this.selectedInput &&
+      !this.midiInputs.find((input) => input.id === this.selectedInput)
+    ) {
+      this.selectedInput = "";
+      this.logToWindow("Selected input device no longer available", "warning");
+    }
+    if (
+      this.selectedOutput &&
+      !this.midiOutputs.find((output) => output.id === this.selectedOutput)
+    ) {
+      this.selectedOutput = "";
+      this.logToWindow("Selected output device no longer available", "warning");
+    }
   },
 
   handleInputChange() {
-    if (this.midiAccess) {
-      this.midiAccess.inputs.forEach((input) => {
-        input.onmidimessage = null;
-      });
-      const selectedDevice = this.midiAccess.inputs.get(this.selectedInput);
-      if (selectedDevice) {
+    const selectedDevice = this.midiInputs.find(
+      (device) => device.id === this.selectedInput,
+    );
+    if (selectedDevice) {
         selectedDevice.onmidimessage = this.onMIDIMessage.bind(this);
-        this.logToWindow(`Input changed: ${selectedDevice.name}`, "info");
-      }
+      this.logToWindow(`Input changed: ${selectedDevice.name}`, "info");
     }
   },
 
@@ -152,8 +205,40 @@ export default () => ({
 
   onMIDIMessage(event) {
     const formattedMessage = this.formatMIDIMessage(event);
+
+    // Active Sensing message, ignore
+    if (event.data[0] === 0xfe) {
+      return;
+    }
+
     const messageType = this.isSysExMessage(event.data[0]) ? "sysex" : "midi";
     this.logToWindow(formattedMessage, messageType);
+
+    if (isSysexIdentityReply(event.data)) {
+      const parsed = parseMIDIMessage(event.data);
+
+      const manufacturer = extractHexSlice(event.data, 5, 8);
+      const manufacturerName = MIDI_MANUFACTURERS[manufacturer] || "Unknown";
+      const family = extractHexSlice(event.data, 8, 10);
+      const model = extractHexSlice(event.data, 10, 12);
+      const version = bytesToVersion(event.data, 12, 4);
+
+      if (manufacturer === ARTURIA) {
+        // Identity Reply - Manufacturer: 00 20 6B (Arturia), Family: 04 00, Model: 01 01, Version: 1.0.3.2
+        if (family == "04 00" && model == "01 01") {
+          this.detectedDevice = {
+            manufacturer: manufacturerName,
+            name: "Arturia MiniBrute SE",
+            version: version,
+          };
+
+          this.logToWindow("Arturia MiniBrute SE detected", "debug");
+        }
+      }
+
+      const message = `Identity Reply - Manufacturer: ${manufacturer} (${manufacturerName}), Family: ${family}, Model: ${model}, Version: ${version}`;
+      this.logToWindow(message, "success");
+    }
   },
 
   logToWindow(message, type = "info") {
@@ -162,12 +247,12 @@ export default () => ({
       message: message,
       type: type,
     };
+
     this.logMessages.push(newEntry);
 
-    if (this.autoScroll)
-      this.$nextTick(() => {
-        this.scrollToBottom();
-      });
+    if (this.autoScroll) {
+      this.$nextTick(() => this.scrollToBottom());
+    }
   },
 
   scrollToBottom() {
@@ -203,7 +288,7 @@ export default () => ({
     notes.forEach((note, i) => {
       setTimeout(() => {
         // Note On
-        output.send([0x90, note, velocity]);
+        this.sendMidiMessage([0x90, note, velocity]);
         this.logToWindow(
           `Note On: ${note} (${getNoteNameFromMIDI(note)})`,
           "debug",
@@ -211,7 +296,7 @@ export default () => ({
 
         // Note Off
         setTimeout(() => {
-          output.send([0x80, note, 0]);
+          this.sendMidiMessage([0x80, note, 0]);
           this.logToWindow(
             `Note Off: ${note} (${getNoteNameFromMIDI(note)})`,
             "debug",
@@ -242,8 +327,8 @@ export default () => ({
     }
 
     for (let channel = 0; channel < 16; channel++) {
-      output.send([0xb0 | channel, 123, 0]);
-      output.send([0xb0 | channel, 120, 0]);
+      this.sendMidiMessage([0xb0 | channel, 123, 0]);
+      this.sendMidiMessage([0xb0 | channel, 120, 0]);
     }
 
     this.logToWindow("Sent All Notes Off on all channels", "info");
@@ -269,11 +354,16 @@ export default () => ({
       data = message.split(" ").map((byte) => parseInt(byte, 16));
     }
 
-    this.sentMessages.push({
-      raw: message,
+    this.sentMessages.unshift({
+      raw: Array.isArray(message) ? bytesToHex(message) : message,
       bytes: data,
       timestamp: new Date().toISOString(),
     });
+
+    // Limit the number of sent messages stored (e.g., keep only the last 100)
+    if (this.sentMessages.length > 50) {
+      this.sentMessages.pop();
+    }
 
     if (isSysExMessage(data[0])) {
       if (this.safeMode) {
@@ -292,10 +382,10 @@ export default () => ({
       }
     }
 
-    this.logToWindow("Sending: " + bytesToHex(data), "info");
+    this.logToWindow("Sending: " + bytesToHex(data), "debug");
 
     try {
-      output.send(midiMessageAsBytes);
+      output.send(data);
     } catch (error) {
       this.logToWindow(`Error sending MIDI message: ${error.message}`, "error");
     }

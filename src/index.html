@@ -40,6 +40,8 @@
         <div
           class="ml-auto flex flex-row items-center justify-between gap-2 py-1"
         >
+          <button x-on:click="sendSysexIdentityRequest">identify</button>
+
           <div class="flex flex-row gap-2">
             <select
               id="midiInput"
@@ -74,39 +76,39 @@
             <span
               class="inline-block text-[10px] font-light leading-none text-slate-500"
             >
+              Brand
+            </span>
+            <span class="inline-block text-xs font-medium leading-none">
+              <span x-text="detectedDevice?.manufacturer ?? '-'"></span>
+            </span>
+          </div>
+          <div class="flex flex-col justify-center gap-1.5 text-left">
+            <span
+              class="inline-block text-[10px] font-light leading-none text-slate-500"
+            >
+              Device
+            </span>
+            <span class="inline-block text-xs font-medium leading-none">
+              <span x-text="detectedDevice?.name ?? '-'"></span>
+            </span>
+          </div>
+          <div class="flex flex-col justify-center gap-1.5 text-left">
+            <span
+              class="inline-block text-[10px] font-light leading-none text-slate-500"
+            >
               Version
             </span>
             <span class="inline-block text-xs font-medium leading-none">
-              v1.2.3
-            </span>
-          </div>
-          <div class="flex flex-col justify-center gap-1.5 text-left">
-            <span
-              class="inline-block text-[10px] font-light leading-none text-slate-500"
-            >
-              Connected
-            </span>
-            <span class="inline-block text-xs font-medium leading-none">
-              Yes
-            </span>
-          </div>
-          <div class="flex flex-col justify-center gap-1.5 text-left">
-            <span
-              class="inline-block text-[10px] font-light leading-none text-slate-500"
-            >
-              MIDI Manufacturer
-            </span>
-            <span class="inline-block text-xs font-medium leading-none">
-              Yamaha Corporation
+              <span x-text="detectedDevice?.version ?? '-'"></span>
             </span>
           </div>
         </div>
       </header>
 
       <div class="flex h-full flex-1 flex-row">
-        <div class="h-full w-1/2 flex-1 border-r border-zinc-800">
+        <div class="flex h-full w-1/2 flex-1 flex-col border-r border-zinc-800">
           <div
-            class="flex items-center justify-between gap-3 border-y border-slate-800 bg-slate-900 px-3 py-0.5"
+            class="flex h-10 items-center justify-between gap-3 border-y border-slate-800 bg-slate-900 px-3 py-0.5"
           >
             <span class="mr-auto font-mono text-xs leading-none">
               Data entry
@@ -161,10 +163,35 @@
             class="textarea placeholder-gray-700"
             :placeholder="`Write a midi message as HEX and press enter to send it.\nexample:\n90 48 7f (note on)\n80 48 00 (note off)`"
           ></textarea>
+
+          <div class="h-1/2 overflow-y-auto bg-zinc-950 font-mono text-xs">
+            <template
+              x-for="(msg, index) in sentMessages.slice().reverse()"
+              :key="`sent-${index}`"
+            >
+              <div
+                class="flex cursor-pointer flex-col border-2 border-black p-1 px-2 leading-5 transition-all duration-100 ease-in-out hover:bg-slate-100/5 hover:brightness-110"
+                x-bind:class="{
+          'text-emerald-400 hover:!bg-emerald-800/10': isSysExMessage(msg.bytes[0]),
+          'text-cyan-400 bg-cyan-800/15 hover:!bg-cyan-800/25': !isSysExMessage(msg.bytes[0])
+        }"
+              >
+                <div class="flex justify-between text-xs opacity-50">
+                  <span
+                    x-text="new Date(msg.timestamp).toLocaleTimeString()"
+                  ></span>
+                  <span
+                    x-text="isSysExMessage(msg.bytes[0]) ? 'SysEx' : 'MIDI'"
+                  ></span>
+                </div>
+                <code class="block" x-text="msg.raw"></code>
+              </div>
+            </template>
+          </div>
         </div>
         <div class="flex h-full w-1/2 flex-1 flex-col">
           <div
-            class="flex items-center justify-between gap-3 border-y border-slate-800 bg-slate-900 px-3 py-0.5"
+            class="flex h-10 items-center justify-between gap-3 border-y border-slate-800 bg-slate-900 px-3 py-0.5"
           >
             <span class="mr-auto font-mono text-xs leading-none">
               MIDI Monitor
@@ -173,7 +200,7 @@
             <button
               x-tooltip.raw="When enabled, the app will automatically scroll to the bottom of the log window when new messages are added"
               x-on:click="toggleAutoScroll"
-              class="command-button !w-auto"
+              class="command-button"
             >
               <svg
                 x-show="!autoScroll"
