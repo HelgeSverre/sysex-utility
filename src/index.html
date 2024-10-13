@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en" class="dark m-0 h-full w-full px-0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MIDI SysEx Utility</title>
+
+    <!-- Scripts -->
+    <script type="module" src="./main.js" defer></script>
+    <link rel="preconnect" href="https://fonts.bunny.net" />
+    <link
+      href="https://fonts.bunny.net/css?family=inter:100,200,300,400,500,600,700,800|jetbrains-mono:100,200,300,400,500,600,700,800"
+      rel="stylesheet"
+    />
+
+    <!-- Style -->
+    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css" />
+    <style>
+      [x-cloak] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body
+    class="h-full w-full overflow-hidden bg-slate-950 text-slate-200 antialiased"
+  >
+    <div x-cloak x-data="app" class="flex h-full flex-col">
+      <header class="flex flex-row items-center justify-between px-3 py-1">
+        <h1 class="text-xl font-bold text-blue-400">MIDI SysEx Utility</h1>
+
+        <nav class="flex flex-row items-center justify-between gap-6">
+          <div class="flex flex-row gap-1">
+            <select
+              id="midiInput"
+              x-model="selectedInput"
+              x-on:change="handleInputChange"
+              class="input focusable w-40 !bg-slate-900"
+            >
+              <option value="">Select Input</option>
+              <template x-for="input in midiInputs" :key="`input-${input.id}`">
+                <option x-bind:value="input.id" x-text="input.name"></option>
+              </template>
+            </select>
+            <select
+              id="midiOutput"
+              x-model="selectedOutput"
+              x-on:change="handleOutputChange"
+              class="input focusable w-40 !bg-slate-900"
+            >
+              <option value="">Select Output</option>
+              <template
+                x-for="output in midiOutputs"
+                :key="`output-${output.id}`"
+              >
+                <option x-bind:value="output.id" x-text="output.name"></option>
+              </template>
+            </select>
+          </div>
+        </nav>
+      </header>
+
+      <div class="flex h-full flex-1 flex-row">
+        <div class="h-full w-1/2 flex-1 border-r border-zinc-800">
+          <div
+            class="flex items-center justify-between gap-3 border-y border-slate-800 bg-slate-900 px-3 py-1"
+          >
+            <span class="mr-auto font-mono text-xs leading-none">
+              Send MIDI Messages
+            </span>
+
+            <button
+              x-tooltip.raw="Load the contents of a file into the input field, does NOT send the message without pressing enter"
+              x-on:click="loadFile"
+              class="focusable inline-block rounded p-2 text-xs leading-none text-white"
+            >
+              <span>Load file</span>
+            </button>
+
+            <button
+              x-tooltip.raw="When enabled, the app will ask for confirmation before sending a SysEx message, as it could potentially damage your devices"
+              x-on:click="safeMode = !safeMode"
+              class="focusable inline-block rounded p-2 text-xs leading-none text-white"
+            >
+              <span
+                x-text="safeMode ? 'Safe mode: On' : 'Safe mode: Off'"
+              ></span>
+            </button>
+            <button
+              x-tooltip.raw="Clears the input field"
+              x-on:click="clearMessage"
+              class="focusable inline-block rounded p-2 text-xs leading-none text-white"
+            >
+              <span>Clear</span>
+            </button>
+            <button
+              x-tooltip.raw="Restores the last cleared message, because sometimes you didn't mean to clear it 🙃"
+              x-show="clearedMessage"
+              x-on:click="restoreClearedMessage"
+              class="focusable inline-block rounded p-2 text-xs leading-none text-white"
+            >
+              <span>Restore cleared</span>
+            </button>
+          </div>
+
+          <textarea
+            x-ref="messageInput"
+            x-on:keydown.enter="sendMidiMessage"
+            x-model="message"
+            class="block h-full w-full resize-none bg-zinc-950 p-2 font-mono text-sm text-slate-200 outline-none focus:outline-none"
+            placeholder="Enter SysEx message (e.g., F0 00 20 6B 04 00 01 03 01 00 00 00 F7)"
+          ></textarea>
+        </div>
+        <div class="h-full w-1/2 flex-1">
+          <div
+            class="flex items-center justify-between gap-3 border-y border-slate-800 bg-slate-900 px-3 py-1"
+          >
+            <span class="mr-auto font-mono text-xs leading-none">
+              MIDI Event Log
+            </span>
+
+            <div class="relative">
+              <button
+                x-ref="button"
+                x-on:click="showFilter = !showFilter"
+                class="focusable inline-block rounded p-2 text-xs leading-none text-white"
+              >
+                <span>Filter</span>
+              </button>
+
+              <div
+                x-transition.origin.top.right
+                x-trap="showFilter"
+                x-show="showFilter"
+                class="absolute right-2 top-3 mt-8"
+              >
+                <div
+                  class="w-full max-w-64 space-y-4 rounded border border-slate-800 bg-slate-900 p-4 shadow-xl"
+                >
+                  <div>
+                    <span class="mb-1 block text-xs font-medium text-slate-500">
+                      Search:
+                    </span>
+
+                    <input
+                      type="text"
+                      placeholder="Search"
+                      class="input focusable w-40 border border-slate-950 bg-slate-950"
+                    />
+                  </div>
+
+                  <div>
+                    <span class="mb-1 block text-xs font-medium text-slate-500">
+                      Filter messages by type:
+                    </span>
+                    <select
+                      class="input focusable w-40 border border-slate-950 bg-slate-950"
+                    >
+                      <option value="">All</option>
+                      <option value="sysex">SysEx</option>
+                      <option value="midi">MIDI</option>
+                      <option value="warning">Warning</option>
+                      <option value="error">Error</option>
+                      <option value="info">Info</option>
+                      <option value="debug">Debug</option>
+                      <option value="comment">Comment</option>
+                      <option value="alert">Alert</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              x-on:click="showLegend = !showLegend"
+              class="focusable inline-block rounded p-2 text-xs leading-none text-white"
+            >
+              <span>Show legend</span>
+            </button>
+            <button
+              x-on:click="showTimestamps = !showTimestamps"
+              class="focusable inline-block rounded p-2 text-xs leading-none text-white"
+            >
+              <span>Show time</span>
+            </button>
+            <button
+              x-on:click="
+isDummyDataRunning = !isDummyDataRunning;
+generateDummyData();"
+              class="focusable inline-block rounded p-2 text-xs leading-none text-white"
+            >
+              <span>Make fake data</span>
+            </button>
+            <button
+              x-on:click="clearLog"
+              class="focusable inline-block rounded p-2 text-xs leading-none text-white"
+            >
+              <span>Clear</span>
+            </button>
+          </div>
+
+          <div
+            x-ref="logWindow"
+            class="h-full overflow-y-auto bg-zinc-950 font-mono text-xs"
+          >
+            <template x-for="(log, index) in logMessages" :key="`log-${index}`">
+              <div
+                class="flex flex-col border-b-2 border-black p-1 px-2 leading-5 transition-colors duration-200 hover:bg-white/10 hover:brightness-110"
+                x-bind:class="{
+                  'text-sky-400 bg-sky-800/15 hover:!bg-sky-800/25': log.type === 'sysex',
+                  'text-green-400 bg-green-800/15 hover:!bg-green-800/25': log.type === 'midi',
+                  'text-yellow-400': log.type === 'warning',
+                  'text-red-400': log.type === 'error',
+                  'text-blue-400': log.type === 'info',
+                  'text-purple-400': log.type === 'debug',
+                  'text-slate-500': log.type === 'comment',
+                  'text-black bg-yellow-500 hover:bg-yellow-500 leading-none font-bold': log.type === 'alert',
+
+                }"
+              >
+                <div class="flex flex-row items-center justify-between text-xs">
+                  <kbd
+                    x-show="showLegend"
+                    class="block opacity-50"
+                    x-text="log.type"
+                  ></kbd>
+                  <kbd
+                    x-show="showTimestamps"
+                    class="whitespace-nowrap opacity-50"
+                    x-text="log.timestamp"
+                  ></kbd>
+                </div>
+
+                <code class="block" x-text="log.message"></code>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

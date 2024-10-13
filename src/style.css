@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .focusable {
+    @apply focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500;
+  }
+
+  .input {
+    @apply block w-full cursor-pointer rounded-md bg-slate-800 px-3 py-2 text-slate-400 focus:text-slate-200;
+  }
+
+  .button {
+    @apply focusable block w-auto cursor-pointer rounded-md bg-slate-900 px-3 py-2 text-center text-slate-200 transition-colors duration-150 ease-in-out hover:bg-slate-800 active:bg-slate-700;
+  }
+
+  .button,
+  .input {
+    @apply h-10 text-sm;
+  }
+
+  .button-group {
+    @apply flex flex-row items-center;
+  }
+
+  .button-group > .button:not(:first-child):not(:last-child),
+  .button-group > .input:not(:first-child):not(:last-child) {
+    @apply rounded-none border-x border-slate-800;
+  }
+
+  .button-group > .button:focus-visible,
+  .button-group > .input:focus-visible {
+    @apply z-10 !rounded-md bg-slate-800;
+  }
+
+  .button-group > .button:first-child,
+  .button-group > .input:first-child {
+    @apply rounded-r-none;
+  }
+
+  .button-group > .button:last-child,
+  .button-group > .input:last-child {
+    @apply rounded-l-none;
+  }
+}
