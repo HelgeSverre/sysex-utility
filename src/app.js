@@ -14,7 +14,9 @@ export default () => ({
   showLegend: true,
   showTimestamps: true,
   showFilter: false,
+  filterTypes: [],
   logMessages: [],
+  selectedMessages: [],
 
   // The text string to send as a MIDI message
   clearedMessage: "",
@@ -37,6 +39,9 @@ export default () => ({
 
     this.generateDummyData();
 
+    this.logToWindow(`F0 00 20 6B 04 01 75 01 3E 01 F7`, "sysex");
+    this.logToWindow(`F0 00 20 6B 04 01 75 01 3E 01 F7`, "sysex");
+    this.logToWindow(`F0 00 20 6B 04 01 75 01 3E 01 F7`, "sysex");
     [
       "error",
       "warning",
@@ -55,7 +60,6 @@ export default () => ({
       `F0 00 20 33 01 00 10 00 7F 07 00 03 2F 01 05 00 7F 06 00 40 7F 00 00 00 00 00 00 0C 1C 40 60 00 00 18 40 16 4B 00 40 40 60 00 7F 32 00 40 00 00 40 14 19 00 00 00 6E 5E 40 00 00 00 01 00 02 00 00 7F 40 00 00 5A 37 22 16 00 00 00 70 02 7F 00 00 00 00 4A 40 40 40 40 32 02 7F 01 16 00 01 40 40 40 40 40 50 01 4C 00 00 00 00 30 7F 40 00 01 00 01 00 00 00 70 50 01 00 02 3C 0B 5A 32 01 12 2B 00 00 00 01 00 00 00 00 00 00 00 00 00 40 00 5E 01 00 00 01 00 00 00 00 39 04 00 00 00 00 7F 00 00 01 42 3E 01 00 01 01 01 24 00 01 00 00 00 00 00 1B 50 34 00 2B 55 40 40 40 40 00 00 40 40 40 40 40 00 40 40 40 5E 1B 14 10 00 1A 2A 36 32 65 13 27 2C 29 22 00 40 00 40 14 00 00 02 00 00 00 55 40 7F 00 40 47 33 40 40 40 2A 00 00 00 00 03 00 40 03 00 40 03 00 40 48 61 72 70 73 69 65 20 48 53 00 04 07 01 00 7F 3E F7 Renoise 3.0b3 MIDI panel: F0 00 20 33 01 00 10 00 7F 07 00 03 2F 01 05 00 7F 06 00 40 7F 00 00 00 00 00 00 0C 1C 40 60 00 00 18 40 16 4B 00 40 40 60 00 7F 32 00 40 00 00 40 14 19 00 00 00 6E 5E 40 00 00 00 01 00 02 00 2B 00 00 00 01 00 00 00 00 00 00 00 00 00 40 00 5E 01 00 00 01 00 00 00 00 39 04 00 00 00 00 7F 2B 00 00 00 01 00 00 00 00 00 00 00 00 00 40 00 5E 01 00 00 01 00 00 00 00 39 04 00 00 00 00 7F 2B 00 00 00 01 00 00 00 00 00 00 00 00 00 40 00 5E 01 00 00 01 00 00 00 00 39 04 00 00 00 00 7F 40 40 40 00 40 40 40 5E 1B 14 10 00 1A 2A 36 32 65 13 27 2C 29 22 00 40 00 40 14 00 00 02 00 00 40 40 40 00 40 40 40 5E 1B 14 10 00 1A 2A 36 32 65 13 27 2C 29 22 00 40 00 40 14 00 00 02 00 00 20 48 53 00 04 07 01 00 7F 3E F7 2A 00 00 00 00 03 00 40 03 00 40 03 00 40 48 61 72 70 73 69 65`,
       "sysex",
     );
-    this.logToWindow(`F0 00 20 6B 04 01 75 01 3E 01 F7`, "sysex");
     this.logToWindow(
       `F0 7E 06 02 00 20 6B 04 00 01 03 01 00 00 00 F7`,
       "sysex",
@@ -232,7 +236,7 @@ export default () => ({
     const messageType = this.getMIDIMessageType(status >> 4);
     const channel = (status & 0xf) + 1;
     const hexString = this.bytesToHex(event.data);
-    return `Received: Type: ${messageType}, Channel: ${channel}, Data: ${hexString}`;
+    return `Type: ${messageType}, Channel: ${channel}, Data: ${hexString}`;
   },
 
   getMIDIMessageType(statusByte) {

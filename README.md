@@ -36,7 +36,7 @@ or any MIDI-enabled devices that use SysEx for configuration and control.
 3. Select your MIDI input and output devices from the dropdowns.
 4. To send a SysEx message:
    - Enter the SysEx string in the input field
-   - Press enter, to make a new line press shift + enter
+   - Press Enter to send, or Shift + Enter for a new line
 5. Use the "Start Dummy Data" button to generate random MIDI activity for testing.
 6. To save a SysEx message:
    - Hover over the message in the log and click the "Save" icon
@@ -90,8 +90,9 @@ If you encounter issues:
 
 1. Ensure your browser supports the Web MIDI API
 2. Check that your MIDI devices are properly connected and recognized by your computer
-3. Clear your browser cache and reload the page
-4. Check the console for any error messages
+3. Verify that SysEx support is enabled on your MIDI devices (some devices require this to be explicitly turned on)
+4. Clear your browser cache and reload the page
+5. Check the console for any error messages
 
 Common issues and solutions:
 
@@ -116,11 +117,27 @@ if (navigator.requestMIDIAccess) {
 If you're still having trouble, please [open an issue](https://github.com/yourusername/midi-sysex-utility/issues) on our
 GitHub repository.
 
-## 📝 Resources and credits
+## 🚩 Reporting Bugs and Requesting Features
 
-- [MIDI Specification documentation](http://midi.teragonaudio.com/tech/midispec.htm)
+We value your feedback and contributions to improve the MIDI SysEx Utility. If you encounter any bugs or have ideas for
+new features:
+
+1. Check the [existing issues](https://github.com/yourusername/midi-sysex-utility/issues) to see if it has already been
+   reported or suggested.
+2. If not, [open a new issue](https://github.com/yourusername/midi-sysex-utility/issues/new), providing as much detail
+   as possible.
+3. For bug reports, include steps to reproduce, expected behavior, and actual behavior.
+4. For feature requests, explain the rationale and potential implementation ideas if you have any.
+
+Your input helps make this tool better for everyone in the MIDI community!
+
+## 📝 Resources and Credits
+
+- [MIDI Specification documentation](http://midi.teragonaudio.com/tech/midispec.htm) - A comprehensive resource for
+  understanding the MIDI protocol and SysEx messages.
 - List of MIDI Manufacturer IDs forked
-  from [francoisgeorgy/midi-manufacturers](https://github.com/francoisgeorgy/midi-manufacturers)
+  from [francoisgeorgy/midi-manufacturers](https://github.com/francoisgeorgy/midi-manufacturers) - Used to identify and
+  display manufacturer names for SysEx messages.
 
 ## 📜 License
 
