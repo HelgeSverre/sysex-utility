@@ -146,8 +146,8 @@
             x-ref="messageInput"
             x-on:keydown.enter="sendMidiMessage"
             x-model="message"
-            class="textarea"
-            placeholder="Enter SysEx message (e.g., F0 00 20 6B 04 00 01 03 01 00 00 00 F7)"
+            class="textarea placeholder-gray-700"
+            :placeholder="`Write a midi message as HEX and press enter to send it.\nexample:\n90 48 7f (note on)\n80 48 00 (note off)`"
           ></textarea>
         </div>
         <div class="flex h-full w-1/2 flex-1 flex-col">
@@ -157,6 +157,47 @@
             <span class="mr-auto font-mono text-xs leading-none">
               MIDI Monitor
             </span>
+
+            <button
+              x-tooltip.raw="When enabled, the app will automatically scroll to the bottom of the log window when new messages are added"
+              x-on:click="toggleAutoScroll"
+              class="command-button !w-auto"
+            >
+              <svg
+                x-show="!autoScroll"
+                class="size-4"
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 17V3" />
+                <path d="m6 11 6 6 6-6" />
+                <path d="M19 21H5" />
+              </svg>
+
+              <svg
+                x-show="autoScroll"
+                class="size-4"
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="14" y="4" width="4" height="16" rx="1" />
+                <rect x="6" y="4" width="4" height="16" rx="1" />
+              </svg>
+            </button>
 
             <div class="relative">
               <button
@@ -205,11 +246,10 @@
                       </button>
                     </div>
 
-
                     <select
                       x-model="filterTypes"
                       multiple
-                      class="input focusable block h-40 font-mono w-full border border-slate-950 bg-slate-950/50"
+                      class="input focusable block h-40 w-full border border-slate-950 bg-slate-950/50 font-mono"
                     >
                       <option value="sysex">SysEx</option>
                       <option value="midi">MIDI</option>
@@ -226,12 +266,11 @@
             </div>
 
             <button
+              x-tooltip.raw="Compact mode will only show the message data itself, while standard mode will show the message type, the message, and the timestamp, enable if you want to see more messages at once"
               x-on:click="showLegend = !showLegend; showTimestamps = !showTimestamps"
               class="command-button"
             >
-              <span
-                x-text="showLegend ? 'Compact Mode' : 'Standard mode'"
-              ></span>
+              <span x-text="showLegend ? 'Compact' : 'Standard'"></span>
             </button>
 
             <button x-on:click="toggleDummyData" class="command-button">
@@ -266,10 +305,17 @@
                   class="mb-0.5 flex flex-row items-center justify-between text-xs"
                 >
                   <span
+                    x-show="showTimestamps"
+                    class="mr-4 block whitespace-nowrap font-mono font-light tabular-nums opacity-50"
+                    x-text="`#${index + 1}`"
+                  ></span>
+                  <span
                     x-show="showLegend"
                     class="block whitespace-nowrap opacity-30"
                     x-text="log.type"
                   ></span>
+
+                  <span class="w-full"></span>
 
                   <span
                     x-show="showTimestamps"
@@ -278,7 +324,10 @@
                   ></span>
                 </button>
 
-                <code class="block" x-text="log.message"></code>
+                <code
+                  class="block whitespace-pre-line font-mono text-xs"
+                  x-text="log.message"
+                ></code>
               </div>
             </template>
           </div>

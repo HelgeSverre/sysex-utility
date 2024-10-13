@@ -1,5 +1,3 @@
-// Utility functions for MIDI data handling
-
 /**
  * Converts a byte array to a hexadecimal string representation.
  * @param {Uint8Array|Array} data - The byte array to convert.
@@ -117,5 +115,123 @@ export function midiToNoteName(note) {
 
 export const SYSEX_IDENTITY_REQUEST = [0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7];
 
-// F0 00 20 6B 04 00 01 03 01 00 00 00 F7
-// F0 7E 06 02 00 20 6B 04 00 01 03 01 00 00 00 F7
+/**
+ * Parses a MIDI message and returns an object with the message details.
+ * @param {Uint8Array|Array} data - The MIDI message data.
+ * @return {object} An object with the parsed MIDI message details.
+ */
+export function parseMIDIMessage(data) {
+  const [status, ...dataBytes] = data;
+  const messageType = status >> 4;
+  const channel = (status & 0xf) + 1;
+
+  const types = {
+    0x8: "Note Off",
+    0x9: "Note On",
+    0xa: "Aftertouch",
+    0xb: "Controller",
+    0xc: "Program Change",
+    0xd: "Channel Pressure",
+    0xe: "Pitch Wheel",
+    0xf: "System",
+  };
+
+  const systemMessages = {
+    0xf0: "System Exclusive",
+    0xf1: "MTC Quarter Frame",
+    0xf2: "Song Position Pointer",
+    0xf3: "Song Select",
+    0xf6: "Tune Request",
+    0xf8: "MIDI Clock",
+    0xf9: "MIDI Tick",
+    0xfa: "MIDI Start",
+    0xfb: "MIDI Continue",
+    0xfc: "MIDI Stop",
+    0xfe: "Active Sense",
+    0xff: "Reset",
+  };
+
+  const controllerTypes = {
+    0: "Bank Select",
+    1: "Modulation Wheel",
+    2: "Breath Controller",
+    4: "Foot Pedal",
+    5: "Portamento Time",
+    6: "Data Entry",
+    7: "Volume",
+    8: "Balance",
+    10: "Pan Position",
+    11: "Expression",
+    12: "Effect Control 1",
+    13: "Effect Control 2",
+    // ... add more controller types as needed
+  };
+
+  let parsed = {
+    type: types[messageType] || "Unknown",
+    channel: channel,
+    data: dataBytes,
+  };
+
+  switch (messageType) {
+    case 0x8: // Note Off
+    case 0x9: // Note On
+      parsed.note = dataBytes[0];
+      parsed.velocity = dataBytes[1];
+      parsed.noteName = getNoteNameFromMIDI(dataBytes[0]);
+      break;
+    case 0xa: // Aftertouch
+      parsed.note = dataBytes[0];
+      parsed.pressure = dataBytes[1];
+      parsed.noteName = getNoteNameFromMIDI(dataBytes[0]);
+      break;
+    case 0xb: // Controller
+      parsed.controllerType =
+        controllerTypes[dataBytes[0]] || `Controller ${dataBytes[0]}`;
+      parsed.value = dataBytes[1];
+      break;
+    case 0xc: // Program Change
+      parsed.program = dataBytes[0];
+      break;
+    case 0xd: // Channel Pressure
+      parsed.pressure = dataBytes[0];
+      break;
+    case 0xe: // Pitch Wheel
+      parsed.value = (dataBytes[1] << 7) + dataBytes[0] - 8192;
+      break;
+    case 0xf: // System messages
+      parsed.type = systemMessages[status] || "Unknown System Message";
+      if (status === 0xf0) {
+        parsed.manufacturer = dataBytes[0];
+        parsed.data = dataBytes.slice(1, -1); // Remove manufacturer ID and end of SysEx byte
+      }
+      break;
+  }
+
+  return parsed;
+}
+
+/**
+ * Converts a MIDI note number to a note name.
+ * @param {number} midiNote - The MIDI note number.
+ * @return {string} The note name.
+ */
+export function getNoteNameFromMIDI(midiNote) {
+  const notes = [
+    "C",
+    "C#",
+    "D",
+    "D#",
+    "E",
+    "F",
+    "F#",
+    "G",
+    "G#",
+    "A",
+    "A#",
+    "B",
+  ];
+  const octave = Math.floor(midiNote / 12) - 1;
+  const noteName = notes[midiNote % 12];
+  return `${noteName}${octave}`;
+}

@@ -1,4 +1,4 @@
-import { isSysExMessage } from "@/utils.js";
+import { bytesToHex, isSysExMessage, parseMIDIMessage } from "@/utils.js";
 
 export default () => ({
   // MIDI access granted by the browser
@@ -11,6 +11,7 @@ export default () => ({
   selectedOutput: "",
 
   // Log window
+  autoScroll: true,
   showLegend: true,
   showTimestamps: true,
   showFilter: false,
@@ -19,6 +20,7 @@ export default () => ({
   selectedMessages: [],
 
   // The text string to send as a MIDI message
+  sentMessages: [],
   clearedMessage: "",
   message: "",
 
@@ -134,9 +136,10 @@ export default () => ({
     };
     this.logMessages.push(newEntry);
 
-    this.$nextTick(() => {
-      this.scrollToBottom();
-    });
+    if (this.autoScroll)
+      this.$nextTick(() => {
+        this.scrollToBottom();
+      });
   },
 
   scrollToBottom() {
@@ -144,6 +147,33 @@ export default () => ({
     if (logWindow) {
       logWindow.scrollTop = logWindow.scrollHeight;
     }
+  },
+
+  playNoteSequence() {
+    const output = this.midiOutputs.find(
+      (device) => device.id === this.selectedOutput,
+    );
+    if (!output) {
+      this.logToWindow("No MIDI output selected", "error");
+      return;
+    }
+
+    const gap = 250;
+    [60, 62, 64, 65, 67, 69, 71, 72].forEach((note, i) => {
+      setTimeout(
+        () => {
+          // Note On
+          output.send([0x90, note, velocity]);
+
+          // Note Off after duration (1000ms by default)
+          setTimeout(() => {
+            this.logToWindow(`Note Off: ${note}`, "debug");
+            output.send([0x80, note, 0]);
+          }, 300);
+        },
+        i * gap + 100,
+      );
+    });
   },
 
   sendMidiMessage() {
@@ -155,9 +185,17 @@ export default () => ({
       return;
     }
 
-    const midiMessageAsBytes = this.message
+    const message = this.message.trim();
+
+    const midiMessageAsBytes = message
       .split(" ")
       .map((byte) => parseInt(byte, 16));
+
+    this.sentMessages.push({
+      raw: message,
+      bytes: midiMessageAsBytes,
+      timestamp: new Date().toISOString(),
+    });
 
     if (isSysExMessage(midiMessageAsBytes[0])) {
       if (this.safeMode) {
@@ -176,13 +214,17 @@ export default () => ({
       }
     }
 
-    this.logToWindow("Sending: " + this.bytesToHex(sysexMessage), "info");
+    this.logToWindow("Sending: " + bytesToHex(midiMessageAsBytes), "info");
 
     try {
       output.send(midiMessageAsBytes);
     } catch (error) {
       this.logToWindow(`Error sending MIDI message: ${error.message}`, "error");
     }
+  },
+
+  toggleAutoScroll() {
+    this.autoScroll = !this.autoScroll;
   },
 
   toggleDummyData() {
@@ -224,33 +266,43 @@ export default () => ({
     this.dummyDataInterval = setTimeout(() => this.generateDummyData(), delay);
   },
 
-  // Utility functions
-  bytesToHex(data, separator = " ") {
-    return Array.from(data)
-      .map((byte) => byte.toString(16).padStart(2, "0").toUpperCase())
-      .join(separator);
-  },
-
   formatMIDIMessage(event) {
-    const [status, data1, data2] = event.data;
-    const messageType = this.getMIDIMessageType(status >> 4);
-    const channel = (status & 0xf) + 1;
-    const hexString = this.bytesToHex(event.data);
-    return `Type: ${messageType}, Channel: ${channel}, Data: ${hexString}`;
-  },
+    const parsed = parseMIDIMessage(event.data);
+    let formattedMessage = `Type: ${parsed.type}, Channel: ${parsed.channel}`;
 
-  getMIDIMessageType(statusByte) {
-    const types = [
-      "Note Off",
-      "Note On",
-      "Polyphonic Aftertouch",
-      "Control Change",
-      "Program Change",
-      "Channel Aftertouch",
-      "Pitch Bend",
-      "System",
-    ];
-    return types[statusByte - 8] || "Unknown";
+    switch (parsed.type) {
+      case "Note On":
+      case "Note Off":
+        formattedMessage += `, Note: ${parsed.noteName} (${parsed.note}), Velocity: ${parsed.velocity}`;
+        break;
+      case "Aftertouch":
+        formattedMessage += `, Note: ${parsed.noteName} (${parsed.note}), Pressure: ${parsed.pressure}`;
+        break;
+      case "Controller":
+        formattedMessage += `, Controller: ${parsed.controllerType}, Value: ${parsed.value}`;
+        break;
+      case "Program Change":
+        formattedMessage += `, Program: ${parsed.program}`;
+        break;
+      case "Channel Pressure":
+        formattedMessage += `, Pressure: ${parsed.pressure}`;
+        break;
+      case "Pitch Wheel":
+        formattedMessage += `, Value: ${parsed.value}`;
+        break;
+      case "System Exclusive":
+        formattedMessage += `, Manufacturer: ${parsed.manufacturer.toString(16).padStart(2, "0")}, Data: ${bytesToHex(parsed.data)}`;
+        break;
+      default:
+        if (parsed.type.startsWith("System")) {
+          formattedMessage +=
+            parsed.data.length > 0 ? `, Data: ${bytesToHex(parsed.data)}` : "";
+        } else {
+          formattedMessage += `, Data: ${bytesToHex(event.data)}`;
+        }
+    }
+
+    return formattedMessage;
   },
 
   isSysExMessage(status) {
