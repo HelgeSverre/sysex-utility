@@ -1,3 +1,5 @@
+import MidiManufacturers from "@/midi-manufacturers.js";
+
 /**
  * Converts a byte array to a hexadecimal string representation.
  * @param {Uint8Array|Array} data - The byte array to convert.
@@ -91,6 +93,34 @@ export function isSysexIdentityReply(data) {
   return (
     data[0] === 0xf0 && data[1] === 0x7e && data[3] === 0x06 && data[4] === 0x02
   );
+}
+
+// TODO: Fuck it, brute force
+export function identifyManufacturer(data) {
+  const idThreeBytes = bytesToHex(data.slice(5, 8), "");
+  for (const [id, name] of Object.entries(MidiManufacturers)) {
+    if (idThreeBytes === id.replace(/\s/g, "")) {
+      return { id, name };
+    }
+  }
+
+  const idOneByte = bytesToHex(data.slice(5, 6), "");
+  for (const [id, name] of Object.entries(MidiManufacturers)) {
+    if (idOneByte === id.replace(/\s/g, "")) {
+      return { id, name };
+    }
+  }
+
+  return { id: "Unknown", name: "Unknown Manufacturer" };
+}
+
+export function getManufacturerIdFromSysex(data) {
+  if (data[1] === 0x7e || data[1] === 0x7f) {
+    return extractHexSlice(data, 5, 8); // Manufacturer ID is at index 5-7 for this type of message
+  } else {
+    // 1-byte manufacturer ID
+    return extractHexSlice(data, 5, 6);
+  }
 }
 
 export function midiToNoteName(note) {
@@ -202,7 +232,7 @@ export function parseMIDIMessage(data) {
     case 0xf: // System messages
       parsed.type = systemMessages[status] || "Unknown System Message";
       if (status === 0xf0) {
-        parsed.manufacturer = dataBytes[0];
+        parsed.manufacturer = getManufacturerIdFromSysex(data);
         parsed.data = dataBytes.slice(1, -1); // Remove manufacturer ID and end of SysEx byte
       }
       break;

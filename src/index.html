@@ -40,7 +40,9 @@
         <div
           class="ml-auto flex flex-row items-center justify-between gap-2 py-1"
         >
-          <button x-on:click="sendSysexIdentityRequest">identify</button>
+          <button x-on:click="sendSysexIdentityRequest" class="button text-xs">
+            identify
+          </button>
 
           <div class="flex flex-row gap-2">
             <select
@@ -164,7 +166,9 @@
             :placeholder="`Write a midi message as HEX and press enter to send it.\nexample:\n90 48 7f (note on)\n80 48 00 (note off)`"
           ></textarea>
 
-          <div class="h-1/2 overflow-y-auto bg-zinc-950 font-mono text-xs">
+          <div
+            class="h-2/3 overflow-y-auto border-t border-zinc-800 bg-zinc-950 font-mono text-xs"
+          >
             <template
               x-for="(msg, index) in sentMessages.slice().reverse()"
               :key="`sent-${index}`"
@@ -344,8 +348,8 @@
 
                 }"
               >
-                <button
-                  class="mb-0.5 flex flex-row items-center justify-between text-xs"
+                <div
+                  class="mb-0.5 flex flex-row flex-nowrap items-center justify-between text-xs"
                 >
                   <span
                     x-show="showTimestamps"
@@ -358,14 +362,24 @@
                     x-text="log.type"
                   ></span>
 
-                  <span class="w-full"></span>
+                  <span class="flex-1"></span>
 
                   <span
                     x-show="showTimestamps"
                     class="block whitespace-nowrap opacity-30"
                     x-text="log.timestamp"
                   ></span>
-                </button>
+
+                  <button
+                    x-show="log.raw != null"
+                    @click.stop="saveMessageAsSyx(log.raw)"
+                    class="ml-2 block size-4 text-xs opacity-50 hover:opacity-100"
+                    title="Save as .syx file"
+                  >
+                    💾
+                    <span class="sr-only">Save as SYSEX dump</span>
+                  </button>
+                </div>
 
                 <code
                   class="block whitespace-pre-line font-mono text-xs"

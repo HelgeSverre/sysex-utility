@@ -3,12 +3,13 @@ import {
   bytesToVersion,
   extractHexSlice,
   getNoteNameFromMIDI,
+  identifyManufacturer,
   isSysexIdentityReply,
   isSysExMessage,
   parseMIDIMessage,
   SYSEX_IDENTITY_REQUEST,
 } from "@/utils.js";
-import MIDI_MANUFACTURERS, { ARTURIA } from "@/midi-manufacturers.js";
+import { ARTURIA, WALDORF_ELECTRONICS_GMBH } from "@/midi-manufacturers.js";
 
 export default () => ({
   // MIDI access granted by the browser
@@ -52,6 +53,16 @@ export default () => ({
     } else {
       this.logToWindow("WebMIDI is not supported in this browser.", "error");
     }
+    this.loadStateFromLocalStorage();
+
+    this.$watch("selectedInput", () => this.handleInputChange());
+    this.$watch("selectedOutput", () => this.handleOutputChange());
+    this.$watch("autoScroll", () => this.saveStateToLocalStorage());
+    this.$watch("showLegend", () => this.saveStateToLocalStorage());
+    this.$watch("showTimestamps", () => this.saveStateToLocalStorage());
+    this.$watch("showFilter", () => this.saveStateToLocalStorage());
+    this.$watch("filterTypes", () => this.saveStateToLocalStorage());
+    this.$watch("safeMode", () => this.saveStateToLocalStorage());
   },
 
   get filteredLogMessages() {
@@ -122,6 +133,15 @@ export default () => ({
   onMIDISuccess(access) {
     this.midiAccess = access;
     this.updateDeviceLists();
+
+    // if (this.midiInputs.length === 1 && this.midiOutputs.length === 1) {
+    this.selectedInput = this.midiInputs[0].id;
+    this.handleInputChange();
+
+    this.selectedOutput = this.midiOutputs[0].id;
+    this.handleOutputChange();
+    // }
+
     access.onstatechange = this.onMIDIStateChange.bind(this);
   },
 
@@ -189,7 +209,7 @@ export default () => ({
       (device) => device.id === this.selectedInput,
     );
     if (selectedDevice) {
-        selectedDevice.onmidimessage = this.onMIDIMessage.bind(this);
+      selectedDevice.onmidimessage = this.onMIDIMessage.bind(this);
       this.logToWindow(`Input changed: ${selectedDevice.name}`, "info");
     }
   },
@@ -211,23 +231,37 @@ export default () => ({
       return;
     }
 
-    const messageType = this.isSysExMessage(event.data[0]) ? "sysex" : "midi";
-    this.logToWindow(formattedMessage, messageType);
+    const messageType = isSysExMessage(event.data[0]) ? "sysex" : "midi";
+    this.logToWindow(formattedMessage, messageType, {
+      raw: event.data,
+    });
 
     if (isSysexIdentityReply(event.data)) {
-      const parsed = parseMIDIMessage(event.data);
+      // Only the sysex packet data
+      const { id, name } = identifyManufacturer(event.data);
 
-      const manufacturer = extractHexSlice(event.data, 5, 8);
-      const manufacturerName = MIDI_MANUFACTURERS[manufacturer] || "Unknown";
-      const family = extractHexSlice(event.data, 8, 10);
-      const model = extractHexSlice(event.data, 10, 12);
-      const version = bytesToVersion(event.data, 12, 4);
+      let familyStart, modelStart, versionStart;
+      if (id.length === 2) {
+        // 1-byte manufacturer ID
+        familyStart = 3;
+        modelStart = 5;
+        versionStart = 7;
+      } else {
+        // 3-byte manufacturer ID
+        familyStart = 5;
+        modelStart = 7;
+        versionStart = 9;
+      }
 
-      if (manufacturer === ARTURIA) {
+      const family = extractHexSlice(event.data, familyStart, familyStart + 2);
+      const model = extractHexSlice(event.data, modelStart, modelStart + 2);
+      const version = bytesToVersion(event.data, versionStart, 4);
+
+      if (id === ARTURIA) {
         // Identity Reply - Manufacturer: 00 20 6B (Arturia), Family: 04 00, Model: 01 01, Version: 1.0.3.2
-        if (family == "04 00" && model == "01 01") {
+        if (family === "04 00" && model === "01 01") {
           this.detectedDevice = {
-            manufacturer: manufacturerName,
+            manufacturer: name,
             name: "Arturia MiniBrute SE",
             version: version,
           };
@@ -236,16 +270,31 @@ export default () => ({
         }
       }
 
-      const message = `Identity Reply - Manufacturer: ${manufacturer} (${manufacturerName}), Family: ${family}, Model: ${model}, Version: ${version}`;
+      if (id === WALDORF_ELECTRONICS_GMBH) {
+        // F0 7E 00 06 02 3E 13 00 00 00 31 2E 32 34 F7
+        // �~ >   1.24
+        // Identity Reply - Manufacturer: Waldorf Electronics GmbH (3E), Family: 06 02, Model: 3E 13, Version: 0.0.0.49
+        // v 1.25 - 1.25
+        if (family === "06 02" && model === "3E 13") {
+          this.detectedDevice = {
+            manufacturer: "Waldorf",
+            name: "Blofeld",
+            // version: version,
+          };
+        }
+      }
+
+      const message = `Identity Reply - Manufacturer: ${name} (${id}), Family: ${family}, Model: ${model}, Version: ${version}`;
       this.logToWindow(message, "success");
     }
   },
 
-  logToWindow(message, type = "info") {
+  logToWindow(message, type = "info", meta = {}) {
     const newEntry = {
       timestamp: new Date().toISOString(),
       message: message,
       type: type,
+      ...meta,
     };
 
     this.logMessages.push(newEntry);
@@ -262,6 +311,40 @@ export default () => ({
     }
   },
 
+  saveMessageAsSyx(rawBytes) {
+    const blob = new Blob([new Uint8Array(rawBytes)], {
+      type: "application/octet-stream",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "message.syx";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this.logToWindow("Message saved as .syx file", "info");
+  },
+
+  loadFile() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".syx,.mid,.midi";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const contents = event.target.result;
+        this.message = Array.from(new Uint8Array(contents))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join(" ");
+        this.logToWindow(`Loaded file: ${file.name}`, "info");
+      };
+      reader.readAsArrayBuffer(file);
+    };
+    input.click();
+  },
+
   playJazzLick() {
     const output = this.midiOutputs.find(
       (device) => device.id === this.selectedOutput,
@@ -273,7 +356,7 @@ export default () => ({
     }
 
     const velocity = 127;
-    const tempo = 200;
+    const tempo = 140;
     const quarterNote = 60000 / tempo;
 
     // The jazz lick notes (D, E, F, G, E, C, D)
@@ -496,7 +579,34 @@ export default () => ({
     return formattedMessage;
   },
 
-  isSysExMessage(status) {
-    return status === 0xf0 || status === 0xf7;
+  loadStateFromLocalStorage() {
+    const savedState = JSON.parse(localStorage.getItem("midiAppState") || "{}");
+    this.autoScroll =
+      savedState.autoScroll !== undefined ? savedState.autoScroll : true;
+    this.showLegend =
+      savedState.showLegend !== undefined ? savedState.showLegend : true;
+    this.showTimestamps =
+      savedState.showTimestamps !== undefined
+        ? savedState.showTimestamps
+        : true;
+    this.showFilter =
+      savedState.showFilter !== undefined ? savedState.showFilter : false;
+    this.filterTypes = savedState.filterTypes || [];
+    this.safeMode =
+      savedState.safeMode !== undefined ? savedState.safeMode : true;
+  },
+
+  saveStateToLocalStorage() {
+    const stateToSave = {
+      selectedInput: this.selectedInput,
+      selectedOutput: this.selectedOutput,
+      autoScroll: this.autoScroll,
+      showLegend: this.showLegend,
+      showTimestamps: this.showTimestamps,
+      showFilter: this.showFilter,
+      filterTypes: this.filterTypes,
+      safeMode: this.safeMode,
+    };
+    localStorage.setItem("midiAppState", JSON.stringify(stateToSave));
   },
 });
