@@ -24,7 +24,12 @@
   <body
     class="h-full w-full overflow-hidden bg-slate-950 text-slate-200 antialiased"
   >
-    <div x-cloak x-data="app" class="flex h-full flex-col">
+    <div
+      x-cloak
+      x-data="app"
+      x-on:keydown.window.shift.f="toggleFilter"
+      class="flex h-full flex-col"
+    >
       <header class="flex flex-row items-center justify-between gap-2 pl-3">
         <h1 class="whitespace-nowrap text-sm font-bold text-slate-700">
           SysEx Utility
@@ -118,6 +123,13 @@
             </button>
 
             <button
+              x-tooltip.raw="Makes the app play a jazz lick, because why not 🎷 Mostly for testing that the MIDI output is working"
+              x-on:click="playJazzLick"
+              class="command-button"
+            >
+              <span>Play Jazz Lick 🎷</span>
+            </button>
+            <button
               x-tooltip.raw="Load the contents of a file into the input field, does NOT send the message without pressing enter"
               x-on:click="loadFile"
               class="command-button"
@@ -144,7 +156,7 @@
 
           <textarea
             x-ref="messageInput"
-            x-on:keydown.enter="sendMidiMessage"
+            x-on:keydown.enter="sendInput"
             x-model="message"
             class="textarea placeholder-gray-700"
             :placeholder="`Write a midi message as HEX and press enter to send it.\nexample:\n90 48 7f (note on)\n80 48 00 (note off)`"
@@ -202,7 +214,7 @@
             <div class="relative">
               <button
                 x-ref="button"
-                x-on:click="showFilter = !showFilter"
+                x-on:click="toggleFilter"
                 class="command-button"
               >
                 <span>Filter</span>
@@ -224,7 +236,8 @@
                     </span>
 
                     <input
-                      type="text"
+                      x-model="filterSearch"
+                      type="search"
                       placeholder="Search"
                       class="input focusable block w-full border border-slate-950 bg-slate-950/50"
                     />
@@ -285,7 +298,10 @@
             x-ref="logWindow"
             class="flex-1 overflow-y-auto bg-zinc-950 pb-12 font-mono text-xs"
           >
-            <template x-for="(log, index) in logMessages" :key="`log-${index}`">
+            <template
+              x-for="(log, index) in filteredLogMessages"
+              :key="`log-${index}`"
+            >
               <div
                 class="flex cursor-pointer flex-col border-2 border-black p-1 px-2 leading-5 transition-all duration-100 ease-in-out hover:bg-slate-100/5 hover:brightness-110"
                 x-bind:class="{

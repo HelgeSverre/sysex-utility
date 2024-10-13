@@ -1,4 +1,10 @@
-import { bytesToHex, isSysExMessage, parseMIDIMessage } from "@/utils.js";
+import {
+  bytesToHex,
+  getNoteNameFromMIDI,
+  isSysExMessage,
+  parseMIDIMessage,
+  SYSEX_IDENTITY_REQUEST,
+} from "@/utils.js";
 
 export default () => ({
   // MIDI access granted by the browser
@@ -15,6 +21,7 @@ export default () => ({
   showLegend: true,
   showTimestamps: true,
   showFilter: false,
+  filterSearch: "",
   filterTypes: [],
   logMessages: [],
   selectedMessages: [],
@@ -38,7 +45,28 @@ export default () => ({
     } else {
       this.logToWindow("WebMIDI is not supported in this browser.", "error");
     }
+  },
 
+  get filteredLogMessages() {
+    return this.logMessages.filter((message) => {
+      // Type filtering
+      const typeMatch =
+        this.filterTypes.length === 0 ||
+        this.filterTypes.includes(message.type);
+
+      // Text search
+      const searchMatch =
+        this.filterSearch.trim() === "" ||
+        message.message
+          .toLowerCase()
+          .includes(this.filterSearch.toLowerCase()) ||
+        message.type.toLowerCase().includes(this.filterSearch.toLowerCase());
+
+      return typeMatch && searchMatch;
+    });
+  },
+
+  initializeDummyData() {
     this.generateDummyData();
 
     this.logToWindow(`F0 00 20 6B 04 01 75 01 3E 01 F7`, "sysex");
@@ -149,34 +177,62 @@ export default () => ({
     }
   },
 
-  playNoteSequence() {
+  playJazzLick() {
     const output = this.midiOutputs.find(
       (device) => device.id === this.selectedOutput,
     );
+
     if (!output) {
       this.logToWindow("No MIDI output selected", "error");
       return;
     }
 
-    const gap = 250;
-    [60, 62, 64, 65, 67, 69, 71, 72].forEach((note, i) => {
-      setTimeout(
-        () => {
-          // Note On
-          output.send([0x90, note, velocity]);
+    const velocity = 127;
+    const tempo = 200;
+    const quarterNote = 60000 / tempo;
 
-          // Note Off after duration (1000ms by default)
-          setTimeout(() => {
-            this.logToWindow(`Note Off: ${note}`, "debug");
-            output.send([0x80, note, 0]);
-          }, 300);
-        },
-        i * gap + 100,
-      );
+    // The jazz lick notes (D, E, F, G, E, C, D)
+    const notes = [62, 64, 65, 67, 64, 60, 62];
+    // Rhythm: eighth, eighth, eighth, eighth, quarter, eighth, quarter
+    const durations = [0.5, 0.5, 0.5, 0.5, 1, 0.5, 1].map(
+      (d) => d * quarterNote,
+    );
+
+    let currentTime = 0;
+
+    notes.forEach((note, i) => {
+      setTimeout(() => {
+        // Note On
+        output.send([0x90, note, velocity]);
+        this.logToWindow(
+          `Note On: ${note} (${getNoteNameFromMIDI(note)})`,
+          "debug",
+        );
+
+        // Note Off
+        setTimeout(() => {
+          output.send([0x80, note, 0]);
+          this.logToWindow(
+            `Note Off: ${note} (${getNoteNameFromMIDI(note)})`,
+            "debug",
+          );
+        }, durations[i] - 10); // Subtract 10ms to ensure note off before next note
+      }, currentTime);
+
+      currentTime += durations[i];
     });
+
+    const totalDuration = durations.reduce(
+      (acc, duration) => acc + duration,
+      0,
+    );
+
+    setTimeout(() => {
+      this.allNotesOff();
+    }, totalDuration + 100);
   },
 
-  sendMidiMessage() {
+  allNotesOff() {
     const output = this.midiOutputs.find(
       (device) => device.id === this.selectedOutput,
     );
@@ -185,19 +241,41 @@ export default () => ({
       return;
     }
 
-    const message = this.message.trim();
+    for (let channel = 0; channel < 16; channel++) {
+      output.send([0xb0 | channel, 123, 0]);
+      output.send([0xb0 | channel, 120, 0]);
+    }
 
-    const midiMessageAsBytes = message
-      .split(" ")
-      .map((byte) => parseInt(byte, 16));
+    this.logToWindow("Sent All Notes Off on all channels", "info");
+  },
+
+  sendInput() {
+    this.sendMidiMessage(this.message);
+    this.message = "";
+  },
+  sendMidiMessage(message) {
+    const output = this.midiOutputs.find(
+      (device) => device.id === this.selectedOutput,
+    );
+    if (!output) {
+      this.logToWindow("No MIDI output selected", "error");
+      return;
+    }
+
+    let data = null;
+    if (Array.isArray(message)) {
+      data = message;
+    } else {
+      data = message.split(" ").map((byte) => parseInt(byte, 16));
+    }
 
     this.sentMessages.push({
       raw: message,
-      bytes: midiMessageAsBytes,
+      bytes: data,
       timestamp: new Date().toISOString(),
     });
 
-    if (isSysExMessage(midiMessageAsBytes[0])) {
+    if (isSysExMessage(data[0])) {
       if (this.safeMode) {
         this.logToWindow(
           "Safe mode enabled, confirming intent to send message",
@@ -214,13 +292,36 @@ export default () => ({
       }
     }
 
-    this.logToWindow("Sending: " + bytesToHex(midiMessageAsBytes), "info");
+    this.logToWindow("Sending: " + bytesToHex(data), "info");
 
     try {
       output.send(midiMessageAsBytes);
     } catch (error) {
       this.logToWindow(`Error sending MIDI message: ${error.message}`, "error");
     }
+  },
+
+  sendSysexIdentityRequest() {
+    const output = this.midiOutputs.find(
+      (device) => device.id === this.selectedOutput,
+    );
+    if (output) {
+      try {
+        this.sendMidiMessage(SYSEX_IDENTITY_REQUEST);
+      } catch (error) {
+        this.logToWindow(
+          `Error sending MIDI message: ${error.message}`,
+          "error",
+        );
+      }
+      this.logToWindow("Sent Identity Request", "info");
+    } else {
+      this.logToWindow("No MIDI output selected", "warning");
+    }
+  },
+
+  toggleFilter() {
+    this.showFilter = !this.showFilter;
   },
 
   toggleAutoScroll() {
