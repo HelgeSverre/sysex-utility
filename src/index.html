@@ -362,6 +362,12 @@
                     x-text="log.type"
                   ></span>
 
+                  <span
+                    x-show="showLegend && sysexGroups[log.groupId]?.count > 1"
+                    class="ml-3 block whitespace-nowrap opacity-30"
+                    x-text="`dump ${log.groupId} · ${log.groupIndex}/${sysexGroups[log.groupId]?.count}`"
+                  ></span>
+
                   <span class="flex-1"></span>
 
                   <span
@@ -369,6 +375,14 @@
                     class="block whitespace-nowrap opacity-30"
                     x-text="log.timestamp"
                   ></span>
+
+                  <button
+                    x-show="sysexGroups[log.groupId]?.count > 1"
+                    @click.stop="saveGroupAsSyx(log.groupId)"
+                    class="ml-3 block whitespace-nowrap text-xs opacity-50 hover:opacity-100"
+                    title="Save every message in this dump as one .syx file"
+                    x-text="`save all ${sysexGroups[log.groupId]?.count}`"
+                  ></button>
 
                   <button
                     x-show="log.raw != null"
