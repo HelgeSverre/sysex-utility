@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
-import { resolve } from "path";
+import { resolve } from "node:path";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   // Uncomment this line to allow app to work by opening via file:// protocol (without a server)
   // base: "./",
   root: "src",
+  plugins: [tailwindcss()],
   build: {
     outDir: "../dist",
     emptyOutDir: true,
@@ -13,7 +15,7 @@ export default defineConfig({
   publicDir: "../public",
   resolve: {
     alias: {
-      "@": resolve(__dirname, "src"),
+      "@": resolve(import.meta.dirname, "src"),
     },
   },
 });

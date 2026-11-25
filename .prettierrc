@@ -7,5 +7,6 @@
   "bracketSameLine": false,
   "trailingComma": "all",
   "arrowParens": "always",
-  "htmlWhitespaceSensitivity": "ignore"
+  "htmlWhitespaceSensitivity": "ignore",
+  "tailwindStylesheet": "./src/style.css"
 }

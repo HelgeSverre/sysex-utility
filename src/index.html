@@ -31,7 +31,7 @@
       class="flex h-full flex-col"
     >
       <header class="flex flex-row items-center justify-between gap-2 pl-3">
-        <h1 class="whitespace-nowrap text-sm font-bold text-slate-700">
+        <h1 class="text-sm font-bold whitespace-nowrap text-slate-700">
           SysEx Utility
         </h1>
 
@@ -49,7 +49,7 @@
               id="midiInput"
               x-model="selectedInput"
               x-on:change="handleInputChange"
-              class="input focusable w-40 !bg-slate-900"
+              class="input w-40 focusable bg-slate-900!"
             >
               <option value="">Select MIDI Input</option>
               <template x-for="input in midiInputs" :key="`input-${input.id}`">
@@ -60,7 +60,7 @@
               id="midiOutput"
               x-model="selectedOutput"
               x-on:change="handleOutputChange"
-              class="input focusable w-40 !bg-slate-900"
+              class="input w-40 focusable bg-slate-900!"
             >
               <option value="">Select MIDI Output</option>
               <template
@@ -76,31 +76,31 @@
         <div class="status-bar ml-auto whitespace-nowrap">
           <div class="flex flex-col justify-center gap-1.5 text-left">
             <span
-              class="inline-block text-[10px] font-light leading-none text-slate-500"
+              class="inline-block text-[10px] leading-none font-light text-slate-500"
             >
               Brand
             </span>
-            <span class="inline-block text-xs font-medium leading-none">
+            <span class="inline-block text-xs leading-none font-medium">
               <span x-text="detectedDevice?.manufacturer ?? '-'"></span>
             </span>
           </div>
           <div class="flex flex-col justify-center gap-1.5 text-left">
             <span
-              class="inline-block text-[10px] font-light leading-none text-slate-500"
+              class="inline-block text-[10px] leading-none font-light text-slate-500"
             >
               Device
             </span>
-            <span class="inline-block text-xs font-medium leading-none">
+            <span class="inline-block text-xs leading-none font-medium">
               <span x-text="detectedDevice?.name ?? '-'"></span>
             </span>
           </div>
           <div class="flex flex-col justify-center gap-1.5 text-left">
             <span
-              class="inline-block text-[10px] font-light leading-none text-slate-500"
+              class="inline-block text-[10px] leading-none font-light text-slate-500"
             >
               Version
             </span>
-            <span class="inline-block text-xs font-medium leading-none">
+            <span class="inline-block text-xs leading-none font-medium">
               <span x-text="detectedDevice?.version ?? '-'"></span>
             </span>
           </div>
@@ -176,8 +176,8 @@
               <div
                 class="flex cursor-pointer flex-col border-2 border-black p-1 px-2 leading-5 transition-all duration-100 ease-in-out hover:bg-slate-100/5 hover:brightness-110"
                 x-bind:class="{
-                  'text-emerald-400 hover:!bg-emerald-800/10': isSysExMessage(msg.bytes[0]),
-                  'text-cyan-400 bg-cyan-800/15 hover:!bg-cyan-800/25': !isSysExMessage(msg.bytes[0])
+                  'text-emerald-400 hover:bg-emerald-800/10!': isSysExMessage(msg.bytes[0]),
+                  'text-cyan-400 bg-cyan-800/15 hover:bg-cyan-800/25!': !isSysExMessage(msg.bytes[0])
                 }"
               >
                 <div class="flex justify-between text-xs opacity-50">
@@ -256,7 +256,7 @@
                 x-on:click.outside="showFilter = false"
                 x-trap="showFilter"
                 x-show="showFilter"
-                class="absolute right-2 top-3 z-40 mt-8"
+                class="absolute top-3 right-2 z-40 mt-8"
               >
                 <div
                   class="flex w-72 flex-col gap-6 rounded-md border border-slate-800 bg-slate-900 p-4"
@@ -270,7 +270,7 @@
                       x-model="filterSearch"
                       type="search"
                       placeholder="Search"
-                      class="input focusable block w-full border border-slate-950 bg-slate-950/50"
+                      class="input block w-full border focusable border-slate-950 bg-slate-950/50"
                     />
                   </div>
 
@@ -293,7 +293,7 @@
                     <select
                       x-model="filterTypes"
                       multiple
-                      class="input focusable block h-40 w-full border border-slate-950 bg-slate-950/50 font-mono"
+                      class="input block h-40 w-full border focusable border-slate-950 bg-slate-950/50 font-mono"
                     >
                       <option value="sysex">SysEx</option>
                       <option value="midi">MIDI</option>
@@ -336,8 +336,8 @@
               <div
                 class="flex cursor-pointer flex-col border-2 border-black p-1 px-2 leading-5 transition-all duration-100 ease-in-out hover:bg-slate-100/5 hover:brightness-110"
                 x-bind:class="{
-                  'text-emerald-400 hover:!bg-emerald-800/10': log.type === 'sysex',
-                  'text-cyan-400 bg-cyan-800/15 hover:!bg-cyan-800/25': log.type === 'midi',
+                  'text-emerald-400 hover:bg-emerald-800/10!': log.type === 'sysex',
+                  'text-cyan-400 bg-cyan-800/15 hover:bg-cyan-800/25!': log.type === 'midi',
                   'text-yellow-400': log.type === 'warning',
                   'text-red-400': log.type === 'error',
                   'text-gray-400': log.type === 'info',
@@ -353,7 +353,7 @@
                 >
                   <span
                     x-show="showTimestamps"
-                    class="mr-4 block whitespace-nowrap font-mono font-light tabular-nums opacity-50"
+                    class="mr-4 block font-mono font-light whitespace-nowrap tabular-nums opacity-50"
                     x-text="`#${index + 1}`"
                   ></span>
                   <span
@@ -379,7 +379,7 @@
                   <button
                     x-show="sysexGroups[log.groupId]?.count > 1"
                     @click.stop="saveGroupAsSyx(log.groupId)"
-                    class="ml-3 block whitespace-nowrap text-xs opacity-50 hover:opacity-100"
+                    class="ml-3 block text-xs whitespace-nowrap opacity-50 hover:opacity-100"
                     title="Save every message in this dump as one .syx file"
                     x-text="`save all ${sysexGroups[log.groupId]?.count}`"
                   ></button>
@@ -396,7 +396,7 @@
                 </div>
 
                 <code
-                  class="block whitespace-pre-line font-mono text-xs"
+                  class="block font-mono text-xs whitespace-pre-line"
                   x-text="log.message"
                 ></code>
               </div>

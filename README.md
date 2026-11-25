@@ -55,16 +55,16 @@ git clone git@github.com:HelgeSverre/sysex-utility.git
 cd sysex-utility
 
 # Install dependencies
-yarn install
+bun install
 
 # Start the development server
-yarn dev
+bun run dev
 
 # Format the code
-yarn format
+bun run format
 
 # Build the project
-yarn build
+bun run build
 ```
 
 Then open `http://localhost:8000` in your web browser.
