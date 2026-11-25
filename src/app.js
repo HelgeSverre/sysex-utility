@@ -1,15 +1,17 @@
 import {
   bytesToHex,
-  bytesToVersion,
-  extractHexSlice,
   getNoteNameFromMIDI,
-  identifyManufacturer,
-  isSysexIdentityReply,
   isSysExMessage,
   parseMIDIMessage,
+  splitSysexMessages,
   SYSEX_IDENTITY_REQUEST,
 } from "@/utils.js";
-import { ARTURIA, WALDORF_ELECTRONICS_GMBH } from "@/midi-manufacturers.js";
+import {
+  describeDeviceSysex,
+  parseDeviceSysex,
+  slugify,
+} from "@/devices/index.js";
+import { parseIdentityReply } from "@/devices/identity.js";
 
 export default () => ({
   // MIDI access granted by the browser
@@ -40,6 +42,13 @@ export default () => ({
   message: "",
 
   safeMode: true,
+
+  // SysEx messages that arrive within this gap of each other belong to the same dump
+  sysexGroupGapMs: 1000,
+  sysexGroups: {},
+  sysexGroupSequence: 0,
+  currentSysexGroup: null,
+  lastSysexAt: 0,
 
   // Dummy data related
   isDummyDataRunning: false,
@@ -120,6 +129,8 @@ export default () => ({
 
   clearLog() {
     this.logMessages = [];
+    this.sysexGroups = {};
+    this.currentSysexGroup = null;
     this.logToWindow(`Cleared log messages`, "comment");
   },
   clearMessage() {
@@ -228,68 +239,39 @@ export default () => ({
   },
 
   onMIDIMessage(event) {
-    const formattedMessage = this.formatMIDIMessage(event);
-
     // Active Sensing message, ignore
     if (event.data[0] === 0xfe) {
       return;
     }
 
+    const formattedMessage = this.formatMIDIMessage(event);
     const messageType = isSysExMessage(event.data[0]) ? "sysex" : "midi";
-    this.logToWindow(formattedMessage, messageType, {
-      raw: event.data,
-    });
+    const meta = { raw: event.data };
 
-    if (isSysexIdentityReply(event.data)) {
-      // Only the sysex packet data
-      const { id, name } = identifyManufacturer(event.data);
+    if (messageType === "sysex") {
+      Object.assign(meta, this.assignSysexGroup(event.data));
+    }
 
-      let familyStart, modelStart, versionStart;
-      if (id.length === 2) {
-        // 1-byte manufacturer ID
-        familyStart = 3;
-        modelStart = 5;
-        versionStart = 7;
-      } else {
-        // 3-byte manufacturer ID
-        familyStart = 5;
-        modelStart = 7;
-        versionStart = 9;
+    this.logToWindow(formattedMessage, messageType, meta);
+
+    const identity = parseIdentityReply(event.data);
+    if (identity) {
+      if (identity.device) {
+        this.detectedDevice = {
+          manufacturer: identity.device.brand,
+          name: identity.device.name,
+          version: identity.version,
+        };
+        this.logToWindow(
+          `${identity.device.brand} ${identity.device.name} detected`,
+          "debug",
+        );
       }
 
-      const family = extractHexSlice(event.data, familyStart, familyStart + 2);
-      const model = extractHexSlice(event.data, modelStart, modelStart + 2);
-      const version = bytesToVersion(event.data, versionStart, 4);
-
-      if (id === ARTURIA) {
-        // Identity Reply - Manufacturer: 00 20 6B (Arturia), Family: 04 00, Model: 01 01, Version: 1.0.3.2
-        if (family === "04 00" && model === "01 01") {
-          this.detectedDevice = {
-            manufacturer: name,
-            name: "Arturia MiniBrute SE",
-            version: version,
-          };
-
-          this.logToWindow("Arturia MiniBrute SE detected", "debug");
-        }
-      }
-
-      if (id === WALDORF_ELECTRONICS_GMBH) {
-        // F0 7E 00 06 02 3E 13 00 00 00 31 2E 32 34 F7
-        // �~ >   1.24
-        // Identity Reply - Manufacturer: Waldorf Electronics GmbH (3E), Family: 06 02, Model: 3E 13, Version: 0.0.0.49
-        // v 1.25 - 1.25
-        if (family === "06 02" && model === "3E 13") {
-          this.detectedDevice = {
-            manufacturer: "Waldorf",
-            name: "Blofeld",
-            // version: version,
-          };
-        }
-      }
-
-      const message = `Identity Reply - Manufacturer: ${name} (${id}), Family: ${family}, Model: ${model}, Version: ${version}`;
-      this.logToWindow(message, "success");
+      this.logToWindow(
+        `Identity Reply - Manufacturer: ${identity.manufacturerName} (${identity.manufacturerId}), Family: ${identity.family}, Model: ${identity.model}, Version: ${identity.version}`,
+        "success",
+      );
     }
   },
 
@@ -315,19 +297,79 @@ export default () => ({
     }
   },
 
-  saveMessageAsSyx(rawBytes) {
-    const blob = new Blob([new Uint8Array(rawBytes)], {
+  // Synths like the Yamaha VL70-m send one preset as a burst of separate SysEx
+  // messages, so messages that arrive close together are tracked as one dump.
+  assignSysexGroup(data) {
+    const now = performance.now();
+
+    if (
+      this.currentSysexGroup === null ||
+      now - this.lastSysexAt > this.sysexGroupGapMs
+    ) {
+      this.currentSysexGroup = ++this.sysexGroupSequence;
+      this.sysexGroups[this.currentSysexGroup] = {
+        count: 0,
+        model: null,
+        names: [],
+      };
+    }
+    this.lastSysexAt = now;
+
+    const group = this.sysexGroups[this.currentSysexGroup];
+    group.count++;
+
+    const parsed = parseDeviceSysex(data);
+    if (parsed) {
+      group.model ??= parsed.model;
+      if (parsed.name) group.names.push(parsed.name);
+    }
+
+    return { groupId: this.currentSysexGroup, groupIndex: group.count };
+  },
+
+  downloadBytes(bytes, filename) {
+    const blob = new Blob([new Uint8Array(bytes)], {
       type: "application/octet-stream",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "message.syx";
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    this.logToWindow("Message saved as .syx file", "info");
+  },
+
+  saveMessageAsSyx(rawBytes) {
+    const parsed = parseDeviceSysex(rawBytes);
+    const label = parsed?.name ? slugify([parsed.model, parsed.name]) : "";
+    const filename = `${label || "message"}.syx`;
+
+    this.downloadBytes(rawBytes, filename);
+    this.logToWindow(`Message saved as ${filename}`, "info");
+  },
+
+  saveGroupAsSyx(groupId) {
+    const messages = this.logMessages.filter(
+      (entry) => entry.groupId === groupId && entry.raw != null,
+    );
+    const bytes = messages.flatMap((entry) => Array.from(entry.raw));
+
+    // A dump that carries one name is a single patch; with several names it is a bank
+    const group = this.sysexGroups[groupId];
+    const names = group?.names ?? [];
+    const label = slugify([
+      group?.model,
+      names.length === 1 ? names[0] : `${messages.length}-messages`,
+    ]);
+    const filename = `${label || "sysex-dump"}.syx`;
+
+    this.downloadBytes(bytes, filename);
+    this.logToWindow(
+      `Saved ${messages.length} messages (${bytes.length} bytes) as ${filename}`,
+      "info",
+    );
   },
 
   loadFile() {
@@ -438,7 +480,10 @@ export default () => ({
     if (Array.isArray(message)) {
       data = message;
     } else {
-      data = message.split(" ").map((byte) => parseInt(byte, 16));
+      data = message
+        .trim()
+        .split(/\s+/)
+        .map((byte) => parseInt(byte, 16));
     }
 
     this.sentMessages.unshift({
@@ -452,7 +497,21 @@ export default () => ({
       this.sentMessages.pop();
     }
 
-    if (isSysExMessage(data[0])) {
+    const outgoing = splitSysexMessages(data).map((bytes) => ({
+      bytes,
+      parsed: parseDeviceSysex(bytes),
+    }));
+    const dangerous = outgoing.find((message) => message.parsed?.dangerous);
+
+    if (dangerous) {
+      const confirmed = confirm(
+        `${dangerous.parsed.sendNote}. Are you sure you want to send it?`,
+      );
+      if (!confirmed) {
+        this.logToWindow("Message sending cancelled", "warning");
+        return;
+      }
+    } else if (isSysExMessage(data[0])) {
       if (this.safeMode) {
         this.logToWindow(
           "Safe mode enabled, confirming intent to send message",
@@ -471,8 +530,29 @@ export default () => ({
 
     this.logToWindow("Sending: " + bytesToHex(data), "debug");
 
+    const notes = new Set(
+      outgoing.map((message) => message.parsed?.sendNote).filter(Boolean),
+    );
+    notes.forEach((note) => this.logToWindow(note, "warning"));
+
     try {
-      output.send(data);
+      if (outgoing.length < 2) {
+        output.send(data);
+        return;
+      }
+
+      // A dump made of several SysEx messages is sent one message at a time,
+      // leaving room for each to go over the wire (3125 bytes per second on a
+      // DIN cable) plus a pause for the device to process it.
+      let sendAt = performance.now();
+      outgoing.forEach(({ bytes, parsed }) => {
+        output.send(bytes, sendAt);
+        sendAt += bytes.length / 3.125 + (parsed?.sendPauseMs ?? 100);
+      });
+      this.logToWindow(
+        `Sending ${outgoing.length} messages one at a time`,
+        "info",
+      );
     } catch (error) {
       this.logToWindow(`Error sending MIDI message: ${error.message}`, "error");
     }
@@ -546,7 +626,10 @@ export default () => ({
 
   formatMIDIMessage(event) {
     const parsed = parseMIDIMessage(event.data);
-    let formattedMessage = `Type: ${parsed.type}, Channel: ${parsed.channel}`;
+    let formattedMessage = `Type: ${parsed.type}`;
+    if (event.data[0] < 0xf0) {
+      formattedMessage += `, Channel: ${parsed.channel}`;
+    }
 
     switch (parsed.type) {
       case "Note On":
@@ -569,7 +652,13 @@ export default () => ({
         formattedMessage += `, Value: ${parsed.value}`;
         break;
       case "System Exclusive":
-        formattedMessage += `, Manufacturer: ${parsed.manufacturer.toString(16).padStart(2, "0")}, Data: ${bytesToHex(parsed.data)}`;
+        formattedMessage += `, Manufacturer: ${parsed.manufacturerName} (${parsed.manufacturer}), Data: ${bytesToHex(parsed.data)}`;
+        {
+          const device = parseDeviceSysex(event.data);
+          if (device) {
+            formattedMessage += `\n${describeDeviceSysex(device)}`;
+          }
+        }
         break;
       default:
         if (parsed.type.startsWith("System")) {

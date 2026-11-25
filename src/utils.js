@@ -89,38 +89,49 @@ export function isSysExMessage(status) {
   return status === 0xf0 || status === 0xf7;
 }
 
-export function isSysexIdentityReply(data) {
-  return (
-    data[0] === 0xf0 && data[1] === 0x7e && data[3] === 0x06 && data[4] === 0x02
-  );
+/**
+ * Reads the manufacturer ID that follows the F0 status byte.
+ * @param {Uint8Array|Array} data - A SysEx message starting with F0.
+ * @return {{id: string, name: string, length: number}} ID as hex, its name, and how many bytes it takes up.
+ */
+export function getSysexManufacturer(data) {
+  if (data[1] === 0x7e) {
+    return { id: "7E", name: "Universal Non-Realtime", length: 1 };
+  }
+  if (data[1] === 0x7f) {
+    return { id: "7F", name: "Universal Realtime", length: 1 };
+  }
+
+  // A leading 00 means a 3-byte manufacturer ID
+  const length = data[1] === 0x00 ? 3 : 1;
+  const id = extractHexSlice(data, 1, 1 + length);
+
+  return { id, name: MidiManufacturers[id] ?? "Unknown Manufacturer", length };
 }
 
-// TODO: Fuck it, brute force
-export function identifyManufacturer(data) {
-  const idThreeBytes = bytesToHex(data.slice(5, 8), "");
-  for (const [id, name] of Object.entries(MidiManufacturers)) {
-    if (idThreeBytes === id.replace(/\s/g, "")) {
-      return { id, name };
+/**
+ * Splits a byte array into separate messages at every SysEx boundary, so a
+ * multi-message dump can be sent one message at a time.
+ * @param {Uint8Array|Array} data - The bytes to split.
+ * @return {Array<Array<number>>} The individual messages.
+ */
+export function splitSysexMessages(data) {
+  const bytes = Array.from(data);
+  const messages = [];
+  let start = 0;
+
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] === 0xf7 && bytes[start] === 0xf0) {
+      messages.push(bytes.slice(start, i + 1));
+      start = i + 1;
     }
   }
 
-  const idOneByte = bytesToHex(data.slice(5, 6), "");
-  for (const [id, name] of Object.entries(MidiManufacturers)) {
-    if (idOneByte === id.replace(/\s/g, "")) {
-      return { id, name };
-    }
+  if (start < bytes.length) {
+    messages.push(bytes.slice(start));
   }
 
-  return { id: "Unknown", name: "Unknown Manufacturer" };
-}
-
-export function getManufacturerIdFromSysex(data) {
-  if (data[1] === 0x7e || data[1] === 0x7f) {
-    return extractHexSlice(data, 5, 8); // Manufacturer ID is at index 5-7 for this type of message
-  } else {
-    // 1-byte manufacturer ID
-    return extractHexSlice(data, 5, 6);
-  }
+  return messages;
 }
 
 export function midiToNoteName(note) {
@@ -232,8 +243,12 @@ export function parseMIDIMessage(data) {
     case 0xf: // System messages
       parsed.type = systemMessages[status] || "Unknown System Message";
       if (status === 0xf0) {
-        parsed.manufacturer = getManufacturerIdFromSysex(data);
-        parsed.data = dataBytes.slice(1, -1); // Remove manufacturer ID and end of SysEx byte
+        const manufacturer = getSysexManufacturer(data);
+        const end = data[data.length - 1] === 0xf7 ? -1 : undefined;
+
+        parsed.manufacturer = manufacturer.id;
+        parsed.manufacturerName = manufacturer.name;
+        parsed.data = dataBytes.slice(manufacturer.length, end); // Remove manufacturer ID and end of SysEx byte
       }
       break;
   }
