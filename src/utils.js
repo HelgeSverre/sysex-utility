@@ -89,31 +89,6 @@ export function isSysExMessage(status) {
   return status === 0xf0 || status === 0xf7;
 }
 
-export function isSysexIdentityReply(data) {
-  return (
-    data[0] === 0xf0 && data[1] === 0x7e && data[3] === 0x06 && data[4] === 0x02
-  );
-}
-
-// TODO: Fuck it, brute force
-export function identifyManufacturer(data) {
-  const idThreeBytes = bytesToHex(data.slice(5, 8), "");
-  for (const [id, name] of Object.entries(MidiManufacturers)) {
-    if (idThreeBytes === id.replace(/\s/g, "")) {
-      return { id, name };
-    }
-  }
-
-  const idOneByte = bytesToHex(data.slice(5, 6), "");
-  for (const [id, name] of Object.entries(MidiManufacturers)) {
-    if (idOneByte === id.replace(/\s/g, "")) {
-      return { id, name };
-    }
-  }
-
-  return { id: "Unknown", name: "Unknown Manufacturer" };
-}
-
 /**
  * Reads the manufacturer ID that follows the F0 status byte.
  * @param {Uint8Array|Array} data - A SysEx message starting with F0.

@@ -6,6 +6,7 @@ import {
   parseDeviceSysex,
   slugify,
 } from "../src/devices/index.js";
+import { parseIdentityReply } from "../src/devices/identity.js";
 
 const bytes = (text) => text.split(" ").map((byte) => parseInt(byte, 16));
 const sum = (data) => data.reduce((total, byte) => total + byte, 0);
@@ -181,6 +182,70 @@ test("Virus requests and parameter changes", () => {
     ),
     "Access Virus parameter change, Device: Omni, Page: A, Part: 6, Parameter: 40, Value: 95",
   );
+});
+
+test("Virus single sent from the panel is the edit buffer", () => {
+  const parsed = parseDeviceSysex(
+    virusSingle({
+      device: 0,
+      bank: 0,
+      program: 0x7f,
+      version: 7,
+      name: "Softie  CK",
+    }),
+  );
+
+  assert.deepEqual(parsed.fields[1], ["Location", "Edit buffer"]);
+});
+
+test("Virus global dump that closes a total dump (captured from a Virus C)", () => {
+  const head = bytes(
+    "F0 00 20 33 01 00 12 01 66 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 2A 0A 01 04 03 02 15 04 00 00 00 00 00 1E 0C 57 01 01 00 34 01 04 00 40 10 00 00 00 00 7F 00 00 00 00 00 00 00 00 01 00 01 00 00 00 00 40 00 01 00 00 21 00 01 00 00 00 00 00 00 01 04 17 6C 00 00 00 00 00 00 01 01 00 00 00 01 00 00 0F 00 40 00",
+  );
+  const table = Array.from({ length: 128 }, (_, index) => index);
+  const message = [...head, ...table, 0x5c, 0xf7];
+  const parsed = parseDeviceSysex(message);
+
+  assert.equal(message.length, 267);
+  assert.equal(
+    describeDeviceSysex(parsed),
+    "Access Virus global dump, Device: 1, Checksum: OK",
+  );
+});
+
+test("identity reply from a Virus (captured)", () => {
+  const identity = parseIdentityReply(
+    bytes("F0 7E 00 06 02 00 20 33 00 01 00 00 34 2E 30 78 F7"),
+  );
+
+  assert.equal(identity.manufacturerId, "00 20 33");
+  assert.equal(identity.family, "00 01");
+  assert.equal(identity.model, "00 00");
+  assert.equal(identity.version, "4.0x");
+  assert.deepEqual(identity.device, { brand: "Access", name: "Virus" });
+});
+
+test("identity reply with a 1-byte manufacturer ID", () => {
+  const identity = parseIdentityReply(
+    bytes("F0 7E 00 06 02 3E 13 00 00 00 31 2E 32 34 F7"),
+  );
+
+  assert.equal(identity.manufacturerId, "3E");
+  assert.equal(identity.version, "1.24");
+  assert.deepEqual(identity.device, { brand: "Waldorf", name: "Blofeld" });
+});
+
+test("identity reply with a numeric version", () => {
+  const identity = parseIdentityReply(
+    bytes("F0 7E 00 06 02 00 20 6B 04 00 01 01 01 00 03 02 F7"),
+  );
+
+  assert.equal(identity.version, "1.0.3.2");
+  assert.deepEqual(identity.device, { brand: "Arturia", name: "MiniBrute SE" });
+});
+
+test("identity parser ignores other messages", () => {
+  assert.equal(parseIdentityReply(bytes("F0 7E 7F 06 01 F7")), null);
 });
 
 test("slugify builds a file name stem", () => {

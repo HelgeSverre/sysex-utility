@@ -8,12 +8,14 @@
 //   Single dump, A/B/C: ... 10 bb pp <256 bytes> cs F7                    (267 bytes)
 //   Single dump, TI:    ... 10 bb pp <256 bytes> cs1 <256 bytes> cs2 F7   (524 bytes)
 //   Multi dump:         ... 11 bb pp <256 bytes> cs F7                    (267 bytes)
+//   Global dump:        ... 12 xx xx <256 bytes> cs F7                    (267 bytes)
 //
 // bb = bank (0 = edit buffer, 1 = bank A, ...), pp = program.
 // cs = sum of everything from dd up to the checksum, & 7F. On the TI the second
 // checksum carries on from the first and includes it.
 //
-// A bank is sent as one single dump per program, 128 messages in a row.
+// A bank is sent as one single dump per program, 128 messages in a row. A total
+// dump is the edit buffer, the RAM banks, the multis and a closing global dump.
 
 import { ascii, hex, startsWith, sum } from "./util.js";
 
@@ -68,9 +70,10 @@ function singleLocation(bank, program) {
       ["Program", program],
     ];
   }
-  return program === 0x40
-    ? [["Location", "Edit buffer"]]
-    : [["Location", `Edit buffer, part ${program + 1}`]];
+  // 00-0F is a multi part; 40 (and 7F when sent from the panel) is single mode
+  return program <= 0x0f
+    ? [["Location", `Edit buffer, part ${program + 1}`]]
+    : [["Location", "Edit buffer"]];
 }
 
 // The first data byte is the version of the OS the sound was saved on, which
@@ -132,6 +135,19 @@ function parseMultiDump(data) {
   };
 }
 
+function parseGlobalDump(data) {
+  if (data.length !== 267) return null;
+
+  const checksumAt = DATA_START + PAGE_SIZE;
+
+  return {
+    model: "Virus",
+    kind: "global dump",
+    fields: [deviceField(data[5])],
+    checksumOk: (sum(data.slice(5, checksumAt)) & 0x7f) === data[checksumAt],
+  };
+}
+
 function parse(data) {
   if (!startsWith(data, HEADER) || data.length < 8) return null;
 
@@ -140,6 +156,7 @@ function parse(data) {
 
   if (func === 0x10) return parseSingleDump(data);
   if (func === 0x11) return parseMultiDump(data);
+  if (func === 0x12) return parseGlobalDump(data) ?? unknown(data);
 
   if (REQUESTS[func]) {
     const fields = [device];
@@ -173,10 +190,14 @@ function parse(data) {
     };
   }
 
+  return unknown(data);
+}
+
+function unknown(data) {
   return {
     model: "Virus",
     kind: "message",
-    fields: [device, ["Function", hex([func])]],
+    fields: [deviceField(data[5]), ["Function", hex([data[6]])]],
   };
 }
 

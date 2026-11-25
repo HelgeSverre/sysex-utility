@@ -1,10 +1,6 @@
 import {
   bytesToHex,
-  bytesToVersion,
-  extractHexSlice,
   getNoteNameFromMIDI,
-  identifyManufacturer,
-  isSysexIdentityReply,
   isSysExMessage,
   parseMIDIMessage,
   splitSysexMessages,
@@ -15,7 +11,7 @@ import {
   parseDeviceSysex,
   slugify,
 } from "@/devices/index.js";
-import { ARTURIA, WALDORF_ELECTRONICS_GMBH } from "@/midi-manufacturers.js";
+import { parseIdentityReply } from "@/devices/identity.js";
 
 export default () => ({
   // MIDI access granted by the browser
@@ -258,56 +254,24 @@ export default () => ({
 
     this.logToWindow(formattedMessage, messageType, meta);
 
-    if (isSysexIdentityReply(event.data)) {
-      // Only the sysex packet data
-      const { id, name } = identifyManufacturer(event.data);
-
-      let familyStart, modelStart, versionStart;
-      if (id.length === 2) {
-        // 1-byte manufacturer ID
-        familyStart = 3;
-        modelStart = 5;
-        versionStart = 7;
-      } else {
-        // 3-byte manufacturer ID
-        familyStart = 5;
-        modelStart = 7;
-        versionStart = 9;
+    const identity = parseIdentityReply(event.data);
+    if (identity) {
+      if (identity.device) {
+        this.detectedDevice = {
+          manufacturer: identity.device.brand,
+          name: identity.device.name,
+          version: identity.version,
+        };
+        this.logToWindow(
+          `${identity.device.brand} ${identity.device.name} detected`,
+          "debug",
+        );
       }
 
-      const family = extractHexSlice(event.data, familyStart, familyStart + 2);
-      const model = extractHexSlice(event.data, modelStart, modelStart + 2);
-      const version = bytesToVersion(event.data, versionStart, 4);
-
-      if (id === ARTURIA) {
-        // Identity Reply - Manufacturer: 00 20 6B (Arturia), Family: 04 00, Model: 01 01, Version: 1.0.3.2
-        if (family === "04 00" && model === "01 01") {
-          this.detectedDevice = {
-            manufacturer: name,
-            name: "Arturia MiniBrute SE",
-            version: version,
-          };
-
-          this.logToWindow("Arturia MiniBrute SE detected", "debug");
-        }
-      }
-
-      if (id === WALDORF_ELECTRONICS_GMBH) {
-        // F0 7E 00 06 02 3E 13 00 00 00 31 2E 32 34 F7
-        // �~ >   1.24
-        // Identity Reply - Manufacturer: Waldorf Electronics GmbH (3E), Family: 06 02, Model: 3E 13, Version: 0.0.0.49
-        // v 1.25 - 1.25
-        if (family === "06 02" && model === "3E 13") {
-          this.detectedDevice = {
-            manufacturer: "Waldorf",
-            name: "Blofeld",
-            // version: version,
-          };
-        }
-      }
-
-      const message = `Identity Reply - Manufacturer: ${name} (${id}), Family: ${family}, Model: ${model}, Version: ${version}`;
-      this.logToWindow(message, "success");
+      this.logToWindow(
+        `Identity Reply - Manufacturer: ${identity.manufacturerName} (${identity.manufacturerId}), Family: ${identity.family}, Model: ${identity.model}, Version: ${identity.version}`,
+        "success",
+      );
     }
   },
 
